@@ -40,7 +40,7 @@ The steps to get started on Windows are following:
 To install, run:
 
 ```
-sh -c "$(curl -fsSL https://raw.githubusercontent.com/devbens/dotfiles/master/install.sh)"
+sudo sh -c "$(curl -fsSL https://raw.githubusercontent.com/devbens/dotfiles/master/install.sh)"
 ```
 
 Or manually:
