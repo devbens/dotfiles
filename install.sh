@@ -12,4 +12,4 @@ else
   git pull --rebase --stat origin master
 fi
 
-/usr/bin/env bash -c "$DOTFILES/script/bootstrap"
+/usr/bin/env sudo bash -c "$DOTFILES/script/bootstrap"
