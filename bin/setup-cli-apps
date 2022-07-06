@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+
+$DOTFILES/script/setup-cli-apps "$@"

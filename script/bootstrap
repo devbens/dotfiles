@@ -1,0 +1,162 @@
+#!/usr/bin/env bash
+#
+# bootstrap installs things.
+
+set +e
+proceed=1
+result=0
+bootstrapping="1"
+
+DOTFILES_ROOT="$HOME/.dotfiles"
+LOGFILE=/tmp/dotfiles-setup
+
+echo "Running in $0 ${BASH_VERSION}" >> $LOGFILE
+
+. $DOTFILES_ROOT/script/shared-functions
+
+# ensure we capture unexpected exits
+trap exit_warning EXIT
+
+if [[ $UPDATING -ne 1 ]]; then
+  header "Let's install our dotfiles..."
+else
+  mini_header "Let's update your dotfiles..."
+fi
+
+update_path() {
+  # We need $HOMEBREW_PREFIX/bin to come before /usr/bin on the path, to
+  # pick up brew files we install.  To do this, we just source
+  # .profile.khan, which does this for us (and the new user).
+  # (This assumes you're running mac-setup.sh from the khan-dotfiles
+  # directory.)
+  export PATH="$HOMEBREW_PREFIX/bin:$HOMEBREW_PREFIX/sbin:$DOTFILES/bin:$PATH"
+}
+
+install_homebrew() {
+  check "homebrew" "command -v brew"
+  if [[ "$(uname)" == "Darwin" ]]; then
+    successfully 'echo | ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"'
+  elif [[ "$(expr substr $(uname -s) 1 5)" == "Linux" ]]; then
+    if [[ $proceed -ne 0 ]]; then
+      status "homebrew : ${BOLD}installing dependencies...${NORMAL}"
+      successfully "sudo apt-get update && sudo apt-get -y install build-essential curl file git ruby" >> $LOGFILE 2>&1;
+      info "homebrew"
+      status "homebrew : ${BOLD}installing${NORMAL}"
+      successfully 'echo | sh -c "$(curl -fsSL https://raw.githubusercontent.com/Linuxbrew/install/master/install.sh)"'
+      info "homebrew" "environment ready"
+      status "homebrew : ${BOLD}environment setup${NORMAL}"
+      successfully 'test -d ~/.linuxbrew && eval $(~/.linuxbrew/bin/brew shellenv);test -d /home/linuxbrew/.linuxbrew && eval $(/home/linuxbrew/.linuxbrew/bin/brew shellenv);test -r ~/.bash_profile && echo "eval \$($(brew --prefix)/bin/brew shellenv)" >>~/.bash_profile;echo "eval \$($(brew --prefix)/bin/brew shellenv)" >>~/.profile;echo "eval \$($(brew --prefix)/bin/brew shellenv)" >>~/.localrc;sudo mkdir -p /home/linuxbrew/.linuxbrew/var/homebrew/linked;sudo chown -R $(whoami) /home/linuxbrew/.linuxbrew/var/homebrew/linked'
+    fi
+  fi
+
+  if [[ $proceed -ne 0 ]]; then
+    info "brew doctor : running..."
+    if ! brew doctor; then
+      warn "brew doctor : ${BOLD}Oh no! 'brew doctor' reported some warnings.${NORMAL}"
+      notice "\nThese warnings may cause you trouble, but they are likely harmless.\n"
+
+      user_ask_yn "I'll wait while you read this. Ready to continue?" "y"
+      if [[ "$user_ask_yn_result" == "n" ]]; then
+        exit 1
+      fi
+    else
+      success "brew doctor : ${BOLD}all good!${NORMAL}"
+    fi
+  fi
+
+  # info "Fixing Homebrew permissions ...\n"
+  # successfully "sudo chown -R $(whoami) $(brew --prefix)/*; sudo chown -R +rw $(brew --prefix)/*"
+  #successfully "sudo chgrp -R staff $HOMEBREW_PREFIX/*; sudo chmod -R g+rwxXs $HOMEBREW_PREFIX/*"
+
+  info "updating (but not upgrading) homebrew" "done"
+  successfully "brew update"
+}
+
+install_command_line_essentials() {
+  # A command-line fuzzy finder (https://github.com/junegunn/fzf)
+  check "command-line fuzzy finder" "command -v fzf"
+  successfully "brew install fzf"
+
+  if ! ls "$HOME/.oh-my-zsh/cache/zsh_plugin_paths" > /dev/null 2>&1 || grep -q "$HOME/.oh-my-zsh/cache/zsh_plugin_paths" "FZF_BASE" > /dev/null 2>&1; then
+    tput el
+    printf "\r"
+    echo "FZF_BASE=\"$(brew --prefix fzf)\"" >> $HOME/.oh-my-zsh/cache/zsh_plugin_paths
+  fi
+}
+
+setup_dotfiles() {
+  bootstrapping=1 $HOME/.dotfiles/script/setup-dotfiles
+}
+
+install_1password_cli() {
+  check "1password-cli" "brew ls --cask 1password-cli" "brew upgrade --cask 1password-cli"
+  successfully "brew install --cask 1password-cli"
+}
+
+
+setup_macos() {
+  user_ask_yn "Want to setup macOS (install default apps and plugins)?" "y"
+  if [[ "$user_ask_yn_result" == "y" ]]; then
+    success "Ok, let's do this... You may be asked for your password."
+    bootstrapping=1 $HOME/.dotfiles/script/setup-osx
+  else
+    success "Ok, skipping macOS setup."
+  fi
+}
+
+setup_development() {
+  user_ask_yn "Want to setup $(machine_type) to do development (node, ruby, etc)?" "y"
+  if [[ "$user_ask_yn_result" == "y" ]]; then
+    success "Ok, let's go for it... You may be asked for your password.\n"
+    bootstrapping=1 $HOME/.dotfiles/script/setup-dev
+  else
+    success "Ok, skipping development environment setup."
+  fi
+}
+
+setup_cli_tools() {
+  user_ask_yn "Want to install other convenient cli tools and apps?" "y"
+  if [[ "$user_ask_yn_result" == "y" ]]; then
+    success "Ok, let's continue... You may be asked for your password.\n"
+    bootstrapping=1 $HOME/.dotfiles/script/setup-cli-apps
+  else
+    success "Ok, skipping cli tools installation."
+  fi
+}
+
+setup_locale() {
+  if [[ "`uname -s`" != "Darwin" ]]; then
+    sudo locale-gen "nl_BE.UTF-8"
+  fi
+}
+
+ask_sudo_password
+
+notice_left "\nFeel free to follow the details by running:"
+notice_left "${BOLD} tail -f $LOGFILE ${NORMAL}in another terminal"
+
+setup_dotfiles
+setup_locale
+
+_title_ 'essential tools'
+install_homebrew
+install_command_line_essentials
+
+if [[ "$(uname)" == "Darwin" ]]; then
+  install_1password_cli
+
+  _title_ 'macOS apps and tools'
+  setup_macos
+fi
+
+_title_ 'Development apps and tools'
+setup_development
+
+_title_ 'Other convenient cli tools'
+setup_cli_tools
+
+_title_ '.dotfiles ready & installed!'
+
+trap finish EXIT
+
+env zsh -l

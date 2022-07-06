@@ -1,0 +1,554 @@
+#!/usr/bin/env bash
+
+set +e
+proceed=1
+result=0
+
+DOTFILES_ROOT="$HOME/.dotfiles"
+LOGFILE=/tmp/dotfiles-setup
+
+. $DOTFILES_ROOT/script/shared-functions
+
+# ensure we capture unexpected exits
+trap exit_warning EXIT
+
+mac_apps=(
+  "--Browsers"
+
+  "google-chrome|Google Chrome|Google Chrome Browser|https://www.google.com/chrome/"
+  "firefox|Firefox|Firefox Browser|https://www.mozilla.org/nl/firefox/new/"
+  "brave-browser|Brave|Brave - A Privacy Centric Browser|https://brave.com/"
+
+  "--Productivity"
+
+  "alfred|Alfred for Mac|MacOS productivity app, using hotkeys, keywords, clipboard memory, etc.|https://www.alfredapp.com/"
+  "droplr|Droplr|Easiest File Transfer with customized short link|https://droplr.com/"
+  "numi|Numi|Beautiful calculator app for Mac|https://numi.io/"
+  "franz|Franz|Messaging app forWhatsApp, Messenger, Slack, Telegram, Gmail, etc|https://meetfranz.com"
+
+  "--macOS Tools"
+
+  "the-unarchiver|The Unarchiver|Open any archive in seconds|https://theunarchiver.com/"
+  "keka|Keka|macOS file archiver with focus on privacy|http://www.kekaosx.com/"
+  "nightowl|NightOwl|Easily and automatically toggle MacOS dark mode|https://nightowl.kramser.xyz/"
+  "gfxcardstatus|gfxCardStatus|menu bar app that allows MacBook Pro users to switch between graphics cards|https://gfx.io/"
+  "mounty|Mounty for NTFS|Allows write access to Windows-formatted disks|https://mounty.app/"
+  "bartender|Bartender|Organize your menu bar icons|https://www.macbartender.com/"
+  "rocket|Rocket|Mind-blowing emoji on your Mac|https://matthewpalmer.net/rocket/"
+  "appcleaner|AppCleaner|Uninstall unwanted macOS apps|https://freemacsoft.net/appcleaner/"
+
+  "--Devbens Essentials Apps"
+
+  "slack|Slack|Where work happens|https://slack.com/"
+  "front|FrontApp|The shared inbox for teams|https://frontapp.com/"
+  "harvest|Harvest|Our time tracking tool|https://www.getharvest.com/"
+  "dropbox|Dropbox|File-sharing made easy|https://www.dropbox.com/"
+
+  "--Design Tools"
+
+  "crunch|Crunch|The best png size crusher|https://github.com/chrissimpkins/Crunch"
+  "imageoptim|ImageOptim|ImageOptim makes images load faster|https://imageoptim.com/mac"
+  "imagealpha|ImageAlpha|Reduces file sizes of 24-bit PNG files|https://pngmini.com/"
+
+  "--Development"
+
+  "iterm2|iTerm2|Terminal Emulator|https://www.iterm2.com/"
+  "visual-studio-code|Visual Studio Code|Code editing. Redefined.|https://code.visualstudio.com/"
+  "dash|Dash|Offline access to 200+ API documentation|https://kapeli.com/dash"
+  "github|Github Desktop|Github from your desktop|https://desktop.github.com/"
+  "fork|Fork|A fast and friendly git client|https://git-fork.com/"
+  "switchhosts|SwitchHosts!|an App for hosts management & switching|https://oldj.github.io/SwitchHosts/"
+  "lukakerr/casks/pine|Pin|A lightweight macOS markdown editor|https://github.com/lukakerr/Pine"
+  "table-tool|Table Tool|A simple CSV editor for macOS|https://github.com/jakob/TableTool"
+  "insomnia|Insomnia|A Cross-platform HTTP and GraphQL Client|https://insomnia.rest"
+
+  "--Entertainment"
+
+  "vlc|VLC Media Player|Free and open source media player|https://www.videolan.org/vlc"
+  "motrix|Motrix|A full-featured download manager.|https://motrix.app"
+  "iina|IINA|The modern media player for macOS|https://iina.io"
+  "flume|Flume|A beautiful Instagram experience for your Mac|https://flumeapp.com/"
+
+  "--Screensavers"
+
+  "aerial|Aerial Screensaver|Apple TV Aerial Screensaver for Mac|https://github.com/JohnCoates/Aerial"
+  "fliqlo|Fliqlo|The Flip Clock Screensaver|https://fliqlo.com/"
+  "brooklyn|Brooklyn|Screensaver with very nice visuals|https://github.com/pedrommcarrasco/Brooklyn"
+)
+
+alfred_workflows=(
+  "com.vitorgalvao.alfred.appversion|AppVersion|Show version number of installed apps|https://github.com/vitorgalvao/alfred-workflows/tree/master/AppVersion|https://raw.githubusercontent.com/vitorgalvao/alfred-workflows/master/AppVersion/AppVersion.alfredworkflow"
+  "com.vitorgalvao.alfred.calmnotifications|CalmNotifications|Toggle Do Not Disturb|https://github.com/vitorgalvao/alfred-workflows/tree/master/CalmNotifications|https://raw.githubusercontent.com/vitorgalvao/alfred-workflows/master/CalmNotifications/CalmNotifications.alfredworkflow"
+  "com.vitorgalvao.alfred.coffeecoffee|CoffeeCoffee|Prevent your computer from going to sleep|https://github.com/vitorgalvao/alfred-workflows/tree/master/CoffeeCoffee|https://raw.githubusercontent.com/vitorgalvao/alfred-workflows/master/CoffeeCoffee/CoffeeCoffee.alfredworkflow"
+  "com.vitorgalvao.alfred.downvid|DownVid|Download media from popular sources|https://github.com/vitorgalvao/alfred-workflows/tree/master/DownVid|https://raw.githubusercontent.com/vitorgalvao/alfred-workflows/master/DownVid/DownVid.alfredworkflow"
+  "com.vitorgalvao.alfred.hackerboard|HackerBoard|Front page news from web community sources|https://github.com/vitorgalvao/alfred-workflows/tree/master/HackerBoard|https://raw.githubusercontent.com/vitorgalvao/alfred-workflows/master/HackerBoard/HackerBoard.alfredworkflow"
+  "com.vitorgalvao.alfred.incognitoclone|IncognitoClone|Opens Chrome’s frontmost tab in an incognito window|https://github.com/vitorgalvao/alfred-workflows/tree/master/IncognitoClone|https://raw.githubusercontent.com/vitorgalvao/alfred-workflows/master/IncognitoClone/IncognitoClone.alfredworkflow"
+  "com.vitorgalvao.alfred.linkclean|LinkClean|Removes extraneous information from URLs|https://github.com/vitorgalvao/alfred-workflows/tree/master/LinkClean|https://raw.githubusercontent.com/vitorgalvao/alfred-workflows/master/LinkClean/LinkClean.alfredworkflow"
+  "com.vitorgalvao.alfred.machineclean|MachineClean|Lock your keyboard and trackpad temporarily, so you can clean them|https://github.com/vitorgalvao/alfred-workflows/tree/master/MachineClean|https://raw.githubusercontent.com/vitorgalvao/alfred-workflows/master/MachineClean/MachineClean.alfredworkflow"
+  "com.vitorgalvao.alfred.mediathorn|MediaThorn|Get ratings for different types of media|https://github.com/vitorgalvao/alfred-workflows/tree/master/MediaThorn|https://raw.githubusercontent.com/vitorgalvao/alfred-workflows/master/MediaThorn/MediaThorn.alfredworkflow"
+  "com.vitorgalvao.alfred.processcontrol|ProcessControl|Deal with misbehaving processes|https://github.com/vitorgalvao/alfred-workflows/tree/master/ProcessControl|https://raw.githubusercontent.com/vitorgalvao/alfred-workflows/master/ProcessControl/ProcessControl.alfredworkflow"
+  "com.vitorgalvao.alfred.recentdownloads|RecentDownloads|List and act on the contents of a directory|https://github.com/vitorgalvao/alfred-workflows/tree/master/RecentDownloads|https://raw.githubusercontent.com/vitorgalvao/alfred-workflows/master/RecentDownloads/RecentDownloads.alfredworkflow"
+  "com.vitorgalvao.alfred.strongpassword|StrongPassword|Get a strong password by leveraging multiple sources|https://github.com/vitorgalvao/alfred-workflows/tree/master/StrongPassword|https://raw.githubusercontent.com/vitorgalvao/alfred-workflows/master/StrongPassword/StrongPassword.alfredworkflow"
+  "com.vitorgalvao.alfred.temporaryemail|TemporaryEmail|Get a temporary email inbox|https://github.com/vitorgalvao/alfred-workflows/tree/master/TemporaryEmail|https://raw.githubusercontent.com/vitorgalvao/alfred-workflows/master/TemporaryEmail/TemporaryEmail.alfredworkflow"
+  "de.gh01.alfred.github|Github|GitHub Workflow|https://github.com/gharlan/alfred-github-workflow/releases/download/v1.6.2/github.alfredworkflow"
+  "com.farrell.encode-decode.alfredworkflow|Encode / Decode|Encoding and decoding a string into multiple variations|https://raw.github.com/willfarrell/alfred-encode-decode-workflow/master/encode-decode.alfredworkflow"
+  "com.ruedap.font-awesome|Font Awesome|Search Font Awesome Icons|https://github.com/ruedap/alfred-font-awesome-workflow/releases/download/5.8.0.0/Font-Awesome.alfredworkflow"
+  "com.tedwise.showdesktop|Show Desktop|Quickly show your desktop|http://tedwi.se/u/dj"
+  "com.tedwise.urlencode|URL Encode/Decode|Encode or decode url's|http://tedwi.se/u/dk"
+  "nikivi.search.files|Search files|A lot of file filters to find files quickly|https://raw.githubusercontent.com/nikitavoloboev/small-workflows/master/search-files/Search%20files.alfredworkflow"
+  "nikivi.wifi.workflow|Wifi-Tools|Check WiFi connection / Restart WiFi / Toggle it on/off|https://raw.githubusercontent.com/nikitavoloboev/small-workflows/master/wifi-tools/WiFi%20tools.alfredworkflow"
+  "nikivi.go.to.sub|Go to Reddit Subreddit|Go to a subreddit that you specify|https://raw.githubusercontent.com/nikitavoloboev/small-workflows/master/goto-subreddit/Go%20to%20subreddit.alfredworkflow"
+  "nikivi.birthday|Alfred Birthday|See time passed since your birthday|https://raw.githubusercontent.com/nikitavoloboev/small-workflows/master/birthday/Birthday.alfredworkflow"
+  "net.deanishe.alfred-fakeum|Alfred Fakeum|Generate fake test data in Alfred for testing.|https://github.com/deanishe/alfred-fakeum/releases/download/v2.2.0/Fakeum-2.2.0.alfred3workflow"
+  "recentdownloads.ddjfreedom|Recent Downloads|Quickly do things with your recent downloads|https://github.com/nikitavoloboev/small-workflows/blob/master/augmentations/Recent%20Downloads.alfredworkflow?raw=true"
+  "io.github.ilstar.httpcode|HTTP Status Codes|Checking out http status code very quickly|https://github.com/ilstar/http_status_code/releases/download/v0.2.2/HTTP.Status.Code.alfredworkflow"
+  "nikivi.awesome.lists|Awesome Lists|Alfred workflow to search awesome lists|https://github.com/nikitavoloboev/alfred-awesome-lists/releases/download/v1.2/Awesome.lists.alfredworkflow"
+  "com.tillkruss.loremipsum|Lorem Ipsum|An ultra-fast Lorem Ipsum workflow|https://github.com/tillkruss/alfred-lorem-ipsum/releases/download/v0.2.0/Lorem.Ipsum.alfredworkflow"
+)
+
+function usage() {
+  printf "This script sets up your macOS system and installs various recommended apps.\n\n"
+  printf "Usage: setup-osx [options]\n\n"
+  printf "Options\n"
+  printf "  -a --apps               Only install macOS apps, skip rest of the setup\n"
+  printf "  -d --defaults           Only setup macOS defaults, skip rest of the setup\n"
+  printf "  -i --iterm              Only setup iTerms, skip rest of the setup\n"
+  printf "  -l --list               Show list of apps that can be installed\n"
+  printf "  -q --quicklook          Only install quicklook plugins, skip rest of the setup\n"
+  printf "  -s --single-app <app>   Install app <app> only (use code as reference)\n"
+  printf "\n"
+}
+
+setup_macos_defaults() {
+  # Ask for the administrator password upfront
+  user_ask_yn "Would you like to hide icons on your desktop?" "y"
+  if [[ "$user_ask_yn_result" == "y" ]]; then
+    hide_desktop_icons=1
+  else
+    hide_desktop_icons=0
+  fi
+
+  info "default settings for macOS : ${BOLD}installing${NORMAL}"
+  hide_desktop_icons=$hide_desktop_icons $HOME/.dotfiles/osx/set-defaults.sh
+  success "MacOS defaults : installed"
+
+  if command -v bioutil >/dev/null 2>&1; then
+    nb_fingerprints=$(bioutil -c | grep 'fingerprint' | sed -E 's/User[^:]+://' | sed -E 's/fingerprint\(s\)//' | awk '{$1=$1};1')
+    if (( $nb_fingerprints > 0 )); then
+      info "setup TouchID support for sudo"
+      . $DOTFILES_ROOT/osx/enable-touchid-sudo.zsh
+      output=$(enable-touchid-sudo 2>&1)
+      success "TouchID support for sudo : done"
+    fi
+  fi
+}
+
+install_mac_brew_essentials() {
+  _title_ "macOS essential homebrew apps"
+
+  check "icalBuddy (get events and tasks from the macOS calendar)" "command -v icalBuddy"
+    successfully "brew install ical-buddy"
+}
+
+quicklook_plugins() {
+  _title_ "macOS useful quicklook plugins"
+  plugins=("qlcolorcode" "qlstephen" "qlmarkdown" "quicklook-json" "webpquicklook" "suspicious-package" "quicklookase" "qlvideo")
+  for plugin in "${plugins[@]}"; do
+    check "quicklook plugin ${BOLD}$plugin${NORMAL}" "brew ls --cask $plugin"
+    successfully "brew install --cask $plugin"
+  done
+}
+
+choose_mac_apps_loop() {
+  user "Would you like to install [a]ll, [n]one, or [s]ome of the apps? [a/n/s]?"
+  read -n 1 input
+  case "$input" in
+    [aA][lL][lL] | [aA])
+      for app in "${mac_apps[@]}"; do
+        IFS='|' read -r -a app_info <<< "$app"
+        app_code="${app_info[0]}"
+        app_name="${app_info[1]}"
+        if [[ $app_code != --* ]]; then
+          chosen_apps=("${chosen_apps[@]}" "${app}")
+        fi
+      done
+      ;;
+    [sS][oO][mM][eE] | [sS])
+      echo ''
+      for app in "${mac_apps[@]}"; do
+        IFS='|' read -r -a app_info <<< "$app"
+        app_code="${app_info[0]}"
+        app_name="${app_info[1]}"
+        if [[ $app_code != --* ]]; then
+          user_ask_yn "Would you like to install ${BOLD}${app_name}${NORMAL}?" "y"
+          if [[ "$user_ask_yn_result" == "y" ]]; then
+            chosen_apps=("${chosen_apps[@]}" "${app}")
+          fi
+        fi
+      done
+      ;;
+    [nN][oO][nN][eE] | [nN])
+      ;;
+    *)
+      info_no_spinner "Please choose ${BOLD}[a]${NORMAL}ll, ${BOLD}[n]${NORMAL}one, or ${BOLD}[s]${NORMAL}ome.\n"
+      choose_mac_apps_loop
+      ;;
+  esac
+}
+
+show_possible_apps() {
+  notice_left "${WHITE}We recommend installing following MacOS apps:\n${NORMAL}${DIM}(note: you can CMD-click on a title to go the site for the app)${NORMAL}:\n"
+  for app in "${mac_apps[@]}"; do
+    IFS='|' read -r -a app_info <<< "$app"
+    app_code="${app_info[0]}"
+    app_name="${app_info[1]}"
+    app_description="${app_info[2]}"
+    app_link="${app_info[3]}"
+
+    if [[ $app_code == --* ]]; then
+      app_code="${app_code#*--}"
+      printf "${BOLD}${YELLOW}%s${NORMAL}:\n\n" "${app_code}"
+    else
+      printf " - \e]8;;%s\e\\${BOLD}%s\e]8;;\e\\${NORMAL} ${DIM}(%s)${NORMAL}\n   %s\n\n" "${app_link}" "${app_name}" "${app_code}" "${app_description}"
+    fi
+  done
+  echo ""
+}
+
+install_mac_apps() {
+  chosen_apps=() # When the user opts to install a package it will be added to this array.
+
+  if [[ -z "$1" ]]; then
+    show_possible_apps
+    choose_mac_apps_loop
+
+    echo ""
+  else
+    IFS=',' read -r -a given_appnames <<< "$1"
+    for selected in "${given_appnames[@]}"; do
+      for app in "${mac_apps[@]}"; do
+        IFS='|' read -r -a app_info <<< "$app"
+        app_code="${app_info[0]}"
+        if [[ "$app_code" == "$selected" ]]; then
+          chosen_apps=("${chosen_apps[@]}" "${app}")
+        fi
+      done
+    done
+  fi
+
+  if [ ${#chosen_apps[@]} -ne 0 ]; then
+    function join_by { local d=$1; shift; echo -n "$1"; shift; printf "%s" "${@/#/$d}"; }
+
+    chosen_apps_names=()
+    for app in "${chosen_apps[@]}"; do
+      IFS='|' read -r -a app_info <<< "$app"
+      app_name="${app_info[1]}"
+      chosen_apps_names=("${chosen_apps_names[@]}" "${app_name}")
+    done
+    chosen_apps_names_str=$(join_by ', ' "${chosen_apps_names[@]}")
+    _title_ "Installing Selected Apps ${NORMAL}${DIM}(${chosen_apps_names_str})${NORMAL}"
+  fi
+
+  for app in "${chosen_apps[@]}"; do
+    IFS='|' read -r -a app_info <<< "$app"
+    app_code="${app_info[0]}"
+    app_name="${app_info[1]}"
+    app_description="${app_info[2]}"
+
+    # get executable name from cask to check if it is already installed
+    executable=$(brew info --cask $app_code | grep '(App)' | sed -E 's/(.*).app \(App\)/\1/')
+    # check sudo or keep it alive before spinner starts
+    sudo -v
+    if [[ $app_description == *"Screensaver"* ]]; then
+      check "$app_name" "brew ls --cask $app_code"
+    else
+      check "$app_name" "open -R -g -a '$executable' > /dev/null"
+    fi
+    successfully "brew install --cask $app_code" "perhaps it is already installed."
+  done
+}
+
+setup_iterm() {
+  _title_ "Setup iTerm2 Profile"
+
+  if ! open -R -g -a iTerm > /dev/null; then
+    warn "iTerm2 not found, skipping setup..."
+  else
+    check "Fura Code Nerd font" "brew ls --cask font-fira-code-nerd-font"
+    successfully "brew tap homebrew/cask-fonts && brew install --cask font-fira-code-nerd-font"
+
+    user_ask_yn "iTerm profile: would you like a larger font size?" "y"
+    if [[ "$user_ask_yn_result" == "y" ]]; then
+      font_size=14
+    else
+      font_size=12
+    fi
+
+    source_json="$HOME/.dotfiles/osx/iterm.profile.json"
+    source_plist="$HOME/.dotfiles/osx/iterm.profile.plist"
+    destination="$HOME/Library/Application Support/iTerm2/DynamicProfiles/devbens.profile.plist"
+
+    info "iTerm profile: ${BOLD}generating${NORMAL}"
+    plutil -convert xml1 "$source_json" -o "$source_plist"
+
+    sed -i "" "s/FiraCodeNerdFontComplete-Retina 12/FiraCodeNerdFontComplete-Retina $font_size/g" "$source_plist"
+    success "iTerm profile: generated"
+
+    if [[ -f "$destination" ]] || [[ -d "$destination" ]]; then
+      if [[ "$(readlink "$destination")" -ef "$source_plist" ]]; then
+        success "iTerm profile: already linked"
+      else
+        link_files "$source_plist" "$destination"
+      fi
+    else
+      link_files "$source_plist" "$destination"
+    fi
+    # dynamically load the profile on the fly
+    echo -e "\033]50;SetProfile=Devbens\a"
+  fi
+
+  echo ''
+  echo '  To setup the iTerm Profile, open iTerm:'
+  echo '    Menu -> go into Iterm2 -> Preferences... go to Profiles and set the Devbens profile as default'
+  echo '     (select Devbens dynamic profile -> click Other Actions -> Set as default)'
+  echo ''
+  echo '  The iTerm profile should automatically be loaded after restarting iTerm'
+  echo ''
+  echo '  To complete the iTerm TouchBar integration:'
+  echo '    Menu -> go into View -> Customize Tool Bar... and drag & drop the Fn module on the Touchbar'
+  echo ''
+}
+
+setup_vscode() {
+  user_ask_yn "Want to setup Visual Studio Code?" "y"
+  if [[ "$user_ask_yn_result" == "y" ]]; then
+    bootstrapping=1 $HOME/.dotfiles/script/setup-vscode
+  else
+    success "Ok, skipping VSCode setup."
+  fi
+}
+
+install_appstore_apps() {
+  user_ask_yn "Want to install useful apps from Mac App Store?" "y"
+  if [[ "$user_ask_yn_result" == "y" ]]; then
+    bootstrapping=1 $HOME/.dotfiles/script/setup-appstore-apps
+  else
+    success "No problem, skipping App Store apps installation."
+  fi
+}
+
+
+show_interesting_workflows() {
+  notice_left "${WHITE}We recommend installing following Alfred workflows apps:\n${NORMAL}${DIM}(note: you can CMD-click on a title to go the site for the workflow)${NORMAL}:\n"
+  for wf in "${alfred_workflows[@]}"; do
+    IFS='|' read -r -a wf_info <<< "$wf"
+    wf_code="${wf_info[0]}"
+    wf_name="${wf_info[1]}"
+    wf_description="${wf_info[2]}"
+    wf_link="${wf_info[3]}"
+
+    if [[ $wf_code == --* ]]; then
+      wf_code="${wf_code#*--}"
+      printf "${BOLD}${YELLOW}%s${NORMAL}:\n\n" "${wf_code}"
+    else
+      printf " - \e]8;;%s\e\\${BOLD}%s\e]8;;\e\\${NORMAL} ${DIM}(%s)${NORMAL}\n   %s\n\n" "${wf_link}" "${wf_name}" "${wf_code}" "${wf_description}"
+    fi
+  done
+  echo ""
+}
+
+choose_workflows_loop() {
+  user "Would you like to install [a]ll, [n]one, or [s]ome of these workflows? [a/n/s]?"
+  read -n 1 input
+  case "$input" in
+    [aA][lL][lL] | [aA])
+      for wf in "${alfred_workflows[@]}"; do
+        IFS='|' read -r -a wf_info <<< "$wf"
+        wf_code="${wf_info[0]}"
+        wf_name="${wf_info[1]}"
+        if [[ $wf_code != --* ]]; then
+          chosen_wfs=("${chosen_wfs[@]}" "${wf}")
+        fi
+      done
+      ;;
+    [sS][oO][mM][eE] | [sS])
+      echo ''
+      for wf in "${alfred_workflows[@]}"; do
+        IFS='|' read -r -a wf_info <<< "$wf"
+        wf_code="${wf_info[0]}"
+        wf_name="${wf_info[1]}"
+        if [[ $wf_code != --* ]]; then
+          user_ask_yn "Would you like to install ${BOLD}${wf_name}${NORMAL}?" "y"
+          if [[ "$user_ask_yn_result" == "y" ]]; then
+            chosen_wfs=("${chosen_wfs[@]}" "${wf}")
+          fi
+        fi
+      done
+      ;;
+    [nN][oO][nN][eE] | [nN])
+      ;;
+    *)
+      info_no_spinner "Please choose ${BOLD}[a]${NORMAL}ll, ${BOLD}[n]${NORMAL}one, or ${BOLD}[s]${NORMAL}ome.\n"
+      choose_workflows_loop
+      ;;
+  esac
+}
+
+install_alfred_workflows() {
+  chosen_wfs=() # When the user opts to install a package it will be added to this array.
+
+  if [[ -z "$1" ]]; then
+    show_interesting_workflows
+    choose_workflows_loop
+
+    echo ""
+  else
+    IFS=',' read -r -a given_workflows <<< "$1"
+    for selected in "${given_workflows[@]}"; do
+      for wf in "${alfred_workflows[@]}"; do
+        IFS='|' read -r -a wf_info <<< "$wf"
+        wf_code="${wf_info[0]}"
+        if [[ "$wf_code" == "$selected" ]]; then
+          chosen_wfs=("${chosen_wfs[@]}" "${wf}")
+        fi
+      done
+    done
+  fi
+
+  if [ ${#chosen_wfs[@]} -ne 0 ]; then
+    function join_by { local d=$1; shift; echo -n "$1"; shift; printf "%s" "${@/#/$d}"; }
+
+    chosen_wfs_names=()
+    for wf in "${chosen_wfs[@]}"; do
+      IFS='|' read -r -a wf_info <<< "$wf"
+      wf_name="${wf_info[1]}"
+      chosen_wfs_names=("${chosen_wfs_names[@]}" "${wf_name}")
+    done
+    chosen_wfs_names_str=$(join_by ', ' "${chosen_wfs_names[@]}")
+    _title_ "Installing Selected Workflows ${NORMAL}${DIM}(${chosen_wfs_names_str})${NORMAL}"
+  fi
+
+  installed_workflows=$(awm list)
+
+  for wf in "${chosen_wfs[@]}"; do
+    IFS='|' read -r -a wf_info <<< "$wf"
+    wf_code="${wf_info[0]}"
+    wf_name="${wf_info[1]}"
+    wf_description="${wf_info[2]}"
+    wf_direct_url="${wf_info[4]}"
+
+    if [[ "$installed_workflows" == *"$wf_code"* ]]; then
+      success "${wf_name} workflow : ${BOLD}installed${NORMAL}"
+    else
+      if [[ -z "$wf_direct_url" ]]; then
+        status "${wf_name} workflow : installing"
+        message="${wf_name} workflow"
+        successfully "awm install $wf_code"
+      else
+        status "${wf_name} workflow : downloading"
+        message="${wf_name} workflow"
+        successfully "curl -fsSL $wf_direct_url -o /tmp/$wf_code.alfredworkflow >> $LOGFILE 2>&1;"
+        open "/tmp/$wf_code.alfredworkflow"
+      fi
+      user_wait_for_key "I'll wait while you import this workflow in Alfred. Press any key to continue..."
+    fi
+  done
+}
+
+setup_alfred_workflow() {
+  executable=$(brew info --cask alfred | grep '(App)' | sed -E 's/(.*).app \(App\)/\1/')
+  if open -R -g -a "$executable" > /dev/null; then
+    user_ask_yn "Would you like to install some very handy Alfred workflows?" "y"
+    if [[ "$user_ask_yn_result" == "y" ]]; then
+      install_alfred_workflows
+    else
+      success "No problem, skipping Alfred workflows installation."
+    fi
+  else
+    warn "Alfred is not installed. Skipping Alfred Workflow setup."
+  fi
+}
+
+while [[ "$1" == -* ]]; do
+  case "$1" in
+  -a|--apps)
+    ask_sudo_password
+    install_mac_apps
+    trap finish EXIT
+    exit
+    ;;
+  -d|--defaults)
+    ask_sudo_password
+    setup_macos_defaults
+    trap finish EXIT
+    exit
+    ;;
+  -i|--iterm)
+    ask_sudo_password
+    setup_iterm
+    trap finish EXIT
+    exit
+    ;;
+  -q|--quicklook_plugins)
+    ask_sudo_password
+    setup_iterm
+    trap finish EXIT
+    exit
+    ;;
+  -l|--list)
+    show_possible_apps
+    trap finish EXIT
+    exit
+    ;;
+  -s|--single-app)
+    shift
+    install_mac_apps "$1"
+    trap finish EXIT
+    exit
+    ;;
+  --list-workflows)
+    show_interesting_workflows
+    trap finish EXIT
+    exit
+    ;;
+  --install-workflow)
+    shift
+    install_alfred_workflows "$1"
+    trap finish EXIT
+    exit
+    ;;
+  -h|--help)
+    usage
+    trap finish EXIT
+    exit 0
+    ;;
+  --)
+    shift
+    break
+    ;;
+  esac
+  shift
+done
+
+if [[ $bootstrapping -ne 1 ]]; then
+  header "Let's setup OSX with some apps ..."
+
+  ask_sudo_password
+
+  notice_left "\nFeel free to follow the details by running:"
+  notice_left "${BOLD} tail -f $LOGFILE ${NORMAL}in another terminal\n"
+fi
+
+setup_macos_defaults
+quicklook_plugins
+install_mac_brew_essentials
+install_mac_apps
+install_appstore_apps
+setup_iterm
+setup_vscode
+
+trap finish EXIT
+
+if [[ $bootstrapping -ne 1 ]]; then
+  _title_ "Done... Have fun!"
+fi

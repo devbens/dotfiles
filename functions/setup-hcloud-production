@@ -1,0 +1,8 @@
+# before you can run this, first setup the 1Password CLI:
+# - go to https://my.1password.com/profile and copy the Secret Key
+# - run: op "signin devbase.1password.com", paste the secret key and login with your password
+# the name of the item containing the AWS keys can be modified by using the AWS_1PASSWORD_ITEM
+
+function setup-hcloud-production () {
+  eval $(op signin devbase) && eval $(eval echo $(op get item ${HCLOUD_PRODUCTION_1PASSWORD_ITEM:-'Hetzner Cloud Production'} | jq '.details.sections[] | select(.fields != null) | .fields | map("echo \"Export \(.t) environment variable\" && export \(.t)=\(.v)")  | join(" && ")'))
+}

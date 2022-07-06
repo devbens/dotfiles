@@ -1,0 +1,305 @@
+#!/usr/bin/env bash
+
+set +e
+
+DOTFILES_ROOT="$HOME/.dotfiles"
+LOGFILE=/tmp/dotfiles-setup
+
+. $DOTFILES_ROOT/script/shared-functions
+
+# ensure we capture unexpected exits
+trap exit_warning EXIT
+
+if [[ $bootstrapping -ne 1 ]]; then
+  header "Let's setup Visual Studio Code ..."
+
+  ask_sudo_password
+
+  notice_left "\nFeel free to follow the details by running:"
+  notice_left "${BOLD} tail -f $LOGFILE ${NORMAL}in another terminal\n"
+fi
+
+choose_vscode_extensions_loop() {
+  user "Would you like to install ${BOLD}[a]${NORMAL}ll, ${BOLD}[n]${NORMAL}one, or ${BOLD}[s]${NORMAL}ome of the extensions? [a/n/s]?"
+  read -n 1 input
+  case "$input" in
+    [aA][lL][lL] | [aA])
+      chosen_extensions=("${chosen_extensions[@]}" "${vscode_extensions[@]}")
+      ;;
+    [sS][oO][mM][eE] | [sS])
+      echo ''
+      for extension in "${vscode_extensions[@]}"; do
+        IFS='|' read -r -a extension_info <<< "$extension"
+        extension_name="${extension_info[1]}"
+        user_ask_yn "Would you like to install ${BOLD}${extension_name}${NORMAL}?" "y"
+        if [[ "$user_ask_yn_result" == "y" ]]; then
+          chosen_extensions=("${chosen_extensions[@]}" "${extension}")
+        fi
+      done
+      ;;
+    [nN][oO][nN][eE] | [nN])
+      ;;
+    *)
+      info_no_spinner "Please choose ${BOLD}[a]${NORMAL}ll, ${BOLD}[n]${NORMAL}one, or ${BOLD}[s]${NORMAL}ome.\n"
+      choose_vscode_extensions_loop
+      ;;
+  esac
+}
+
+list_vsvode_extensions() {
+  # based on https://github.com/viatsko/awesome-vscode
+  vscode_extensions=(
+    "formulahendry.auto-close-tag|Auto Close Tag|Automatically add HTML/XML close tag"
+    "formulahendry.auto-rename-tag|Auto Rename Tag|Automatically rename paired HTML/XML tag"
+    "dzannotti.vscode-babel-coloring|Babel ES6/ES7|Adds JS Babel es6/es7 syntax coloring"
+    "karunamurti.haml|Better Haml|Better Haml syntax highlighting, auto close and suggestions"
+    "wwm.better-align|Better Align|Align code without selecting them first."
+    "aaron-bond.better-comments|Better Comments|Improve your code commenting by annotating with alerts and more..."
+    "CoenraadS.bracket-pair-colorizer|Bracket Pair Colorizer|A customizable extension for colorizing matching brackets"
+    "wmaurer.change-case|Change Case|Quickly change the case (camelCase, etc.)"
+    "streetsidesoftware.code-spell-checker|Code Spell Checker|Spelling checker for source code"
+    "streetsidesoftware.code-spell-checker-dutch|Code Spell Checker - Dutch|Dutch dictionary extension for VS Code"
+    "streetsidesoftware.code-spell-checker-french|Code Spell Checker - French|French dictionary extension for VS Code"
+    "deerawan.vscode-dash|Dash|Dash and Zeal integration in Visual Studio Code"
+    "msjsdiag.debugger-for-chrome|Debugger for Chrome|Debug your JavaScript code in the Chrome browser"
+    "PeterJausovec.vscode-docker|Docker|Syntax highlighting, commands, etc. for Dockerfile and docker-compose files."
+    "mrmlnc.vscode-duplicate|Duplicate action|Ability to duplicate files and directories in VS Code"
+    "mkloubert.vscode-deploy-reloaded|Deploy (Reloaded)|Commands for deploying files of your workspace to a destination"
+    "EditorConfig.EditorConfig|EditorConfig for VS Code|EditorConfig Support for Visual Studio Code"
+    "dbaeumer.vscode-eslint|ESLint|Integrates ESLint JavaScript into VS Code."
+    "dsznajder.es7-react-js-snippets|ES7 React/Redux/GraphQL/React-Native snippets|Simple extensions for React"
+    "sleistner.vscode-fileutils|File Utils|A convenient way of creating, duplicating, moving, renaming and deleting files and directories."
+    "donjayamanne.githistory|Git History|View git log, file history, compare branches or commits"
+    "eamodio.gitlens|GitLens — Git supercharged|supercharges the Git capabilities built into Visual Studio Code"
+    "rubbersheep.gi|gi|Generating .gitignore files made easy"
+    "ms-vscode.Go|Go|Rich Go language support for Visual Studio Code"
+    "SirTori.indenticator|Indenticator|Highlights your current indent depth"
+    "Zignd.html-css-class-completion|IntelliSense for CSS in HTML|CSS class name completion for HTML"
+    "ms-kubernetes-tools.vscode-kubernetes-tools|Kubernetes|Develop, deploy and debug Kubernetes applications"
+    "yzhang.markdown-all-in-one|Markdown All in One|All you need to write Markdown"
+    "shd101wyy.markdown-preview-enhanced|Markdown Preview Enhanced|Markdown Preview Enhanced ported to vscode"
+    "dbankier.vscode-instant-markdown|Instant Markdown|Instant previews of your markdown files as you type."
+    "eg2.vscode-npm-script|npm|run npm scripts from VS Code"
+    "christian-kohler.npm-intellisense|npm Intellisense|Autocompletes npm modules in import statements"
+    "ziyasal.vscode-open-in-github|Open in GitHub|Jump to a source code line in Github"
+    "IBM.output-colorizer|Output Colorizer|Syntax highlighting for log files"
+    "christian-kohler.path-intellisense|Path Intellisense|Visual Studio Code plugin that autocompletes filenames"
+    "quicktype.quicktype|Paste JSON as Code|Copy JSON, paste as Go, TypeScript, C#, C++ and more."
+    "pnp.polacode|Polacode|Polaroid for your code"
+    "ego-digital.vscode-powertools|Power Tools|A set of useful and handy tools for Visual Studio Code."
+    "esbenp.prettier-vscode|Prettier - Code formatter|automatically format your JavaScript / TypeScript / CSS"
+    "alefragnani.project-manager|Project Manager|Easily switch between projects"
+    "mechatroner.rainbow-csv|Rainbow CSV|Highlight CSV and TSV files in different colors, Run SQL-like queries"
+    "vsmobile.vscode-react-native|React Native Tools|Code-hinting, debugging and commands for React Native"
+    "OfHumanBondage.react-proptypes-intellisense|React PropTypes Intellisense|PropTypes intellisense for React components"
+    "humao.rest-client|REST Client|REST Client inside Visual StudioCode"
+    "jakob101.RelativePath|Relative Path|Get relative url paths from files in the current workspace."
+    "smulyono.reveal|Reveal In Sidebar|Reveal current open file in sidebar"
+    "Molunerfinn.revealfileinfolder|Reveal File In Folder|Quickly reveal file in folder/finder/explorer"
+    "rebornix.Ruby|Ruby|Provides Ruby language and debugging support for Visual Studio Code"
+    "castwide.solargraph|Ruby Solargraph|Code completion and inline documentation for Ruby"
+    "mrmlnc.vscode-scss|SCSS IntelliSense|Advanced autocompletion and refactoring support for SCSS"
+    "Shan.code-settings-sync|Settings Sync|Synchronize Settings, Snippets, etc. using Github Gist"
+    "Tyriar.sort-lines|Sort lines|Sorts lines of text"
+    "coolbear.systemd-unit-file|systemd-unit-file|Language support for systemd unit files"
+    "cssho.vscode-svgviewer|SVG Viewer|SVG Viewer for Visual Studio Code"
+    "mauve.terraform|Terraform|Syntax highlighting, linting, formatting, etc. for Hashicorp's Terraform"
+    "wayou.vscode-todo-highlight|TODO Highlight|highlight TODOs, FIXMEs, and any keywords, annotations..."
+    "BriteSnow.vscode-toggle-quotes|Toggle Quotes|Toggle between single or double quotes"
+    "ms-vscode.vscode-typescript-tslint-plugin|TSLint|TSLint support for Visual Studio Code"
+    "rbbit.typescript-hero|TypeScript Hero|Additional toolings for typescript"
+    "pflannery.vscode-versionlens|Version Lens|Shows the latest version for each package using code lens"
+    "octref.vetur|Vetur|Vue tooling for VS Code"
+    "MS-vsliveshare.vsliveshare|VS Live Share|Real-time collaborative development"
+    "funkyremi.vscode-google-translate|Vscode Google Translate|Translate text right in your code"
+    "planbcoding.vscode-react-refactor|VSCode React Refactor|Recompose your overgrown JSX."
+    "redhat.vscode-yaml|YAML|YAML Language Support, with built-in Kubernetes and Kedge syntax support"
+    "gamunu.vscode-yarn|yarn|yarn commands for VSCode"
+    "DotJoshJohnson.xml|XML Tools|XML Formatting, XQuery, and XPath Tools for Visual Studio Code"
+  )
+
+  _title_ "Visual Studio Code Extensions"
+  notice_left "${WHITE}We recommend installing the following extensions:\n${NORMAL}${DIM}(note: you can CMD-click on a title to go the description of the extension)${NORMAL}:\n"
+  for extension in "${vscode_extensions[@]}"; do
+    IFS='|' read -r -a extension_info <<< "$extension"
+    extension_code="${extension_info[0]}"
+    extension_link="https://marketplace.visualstudio.com/items?itemName=${extension_info[0]}"
+    extension_name="${extension_info[1]}"
+    extension_description="${extension_info[2]}"
+
+    printf " - \e]8;;%s\e\\${BOLD}%s\e]8;;\e\\${NORMAL} ${DIM}(%s)${NORMAL}\n   %s\n\n" "$extension_link" "${extension_name}" "${extension_code}" "${extension_description}"
+  done
+  echo ""
+
+  choose_vscode_extensions_loop
+
+  echo ""
+}
+
+list_vscodes_themes() {
+  vscode_extensions=(
+    "akamud.vscode-theme-onedark|Atom One Dark"
+    "dustinsanders.an-old-hope-theme-vscode|An Old Hope Theme"
+    "wart.ariake-dark|Ariake Dark"
+    "ultradracula.captain-sweetheart|Captain Sweetheart"
+    "Yummygum.city-lights-theme|City Lights"
+    "wesbos.theme-cobalt2|Cobalt2 Theme Official"
+    "dline.CobaltNext|Cobalt Next"
+    "philsinatra.macos-dark-mode-theme|Dark Mode"
+    "dracula-theme.theme-dracula|Dracula Official"
+    "bceskavich.theme-dracula-at-night|Dracula At Night"
+    "bogdanlazar.edge|Edge Theme"
+    "fisheva.eva-theme|Eva Theme"
+    "Heron.firefox-devtools-theme|Firefox Theme"
+    "lkytal.FlatUI|Flat UI"
+    "thomaspink.theme-github|Github Theme"
+    "SolarLiner.linux-themes|Linux Themes for VS Code"
+    "Equinusocio.vsc-material-theme|Material Theme"
+    "taniarascia.new-moon-vscode|New Moon"
+    "liviuschera.noctis|Noctis"
+    "arcticicestudio.nord-visual-studio-code|Nord"
+    "zhuangtongfa.Material-theme|One Dark Pro"
+    "azemoh.one-monokai|One Monokai Theme"
+    "whizkydee.material-palenight-theme|Palenight Theme"
+    "tinkertrain.theme-panda|Panda Theme"
+    "will-stone.plastic|Plastic Theme"
+    "ahmadawais.shades-of-purple|Shades of Purple"
+    "smlombardi.slime|Slime Theme"
+    "ashrafhadden.dracula-dot-min|Dracula.min"
+  )
+
+  _title_ "Visual Studio Code Themes"
+  notice_left "${WHITE}We recommend installing the following themes:\n${NORMAL}${DIM}(note: you can CMD-click on a title to go the description of the extension)${NORMAL}:\n"
+  for extension in "${vscode_extensions[@]}"; do
+    IFS='|' read -r -a extension_info <<< "$extension"
+    extension_code="${extension_info[0]}"
+    extension_link="https://vscodethemes.com/e/${extension_info[0]}"
+    extension_name="${extension_info[1]}"
+
+    printf " - \e]8;;%s\e\\${BOLD}%s\e]8;;\e\\${NORMAL} ${DIM}(%s)${NORMAL}\n" "$extension_link" "${extension_name}" "${extension_code}"
+  done
+  echo ""
+
+  choose_vscode_extensions_loop
+
+  echo ""
+}
+
+list_icon_themes() {
+  vscode_extensions=(
+    "Yummygum.city-lights-icon-vsc|City Lights Icons"
+    "robertohuertasm.vscode-icons|VSCode Icons"
+    "PKief.material-icon-theme|Material Design Icon Theme"
+  )
+
+  _title_ "Visual Studio Code Icon Themes"
+  notice_left "${WHITE}We recommend installing the following icon themes:\n${NORMAL}${DIM}(note: you can CMD-click on a title to go the description of the extension)${NORMAL}:\n"
+  for extension in "${vscode_extensions[@]}"; do
+    IFS='|' read -r -a extension_info <<< "$extension"
+    extension_code="${extension_info[0]}"
+    extension_link="https://marketplace.visualstudio.com/items?itemName=${extension_info[0]}"
+    extension_name="${extension_info[1]}"
+
+    printf " - \e]8;;%s\e\\${BOLD}%s\e]8;;\e\\${NORMAL} ${DIM}(%s)${NORMAL}\n" "$extension_link" "${extension_name}" "${extension_code}"
+  done
+  echo ""
+
+  choose_vscode_extensions_loop
+
+  echo ""
+}
+
+list_vscode_keymaps() {
+  _title_ "Visual Studio Code Key Binding"
+
+  user "Would you like to use ${BOLD}[v]${NORMAL}im, ${BOLD}[s]${NORMAL}ublime text, ${BOLD}[a]${NORMAL}tom or the ${BOLD}[d]${NORMAL}efault key bindings? [v/s/a/d]?"
+  read -n 1 input
+  case "$input" in
+    [vV])
+      chosen_extensions=("${chosen_extensions[@]}" "vscodevim.vim|Vim Keybindings")
+      ;;
+    [sS])
+      chosen_extensions=("${chosen_extensions[@]}" "ms-vscode.sublime-keybindings|Sublime Text Keybindings")
+      ;;
+    [aA])
+      chosen_extensions=("${chosen_extensions[@]}" "ms-vscode.atom-keybindings|Atom Keybindings")
+      ;;
+    [dD])
+      ;;
+    *)
+      info_no_spinner "Please choose ${BOLD}[v]${NORMAL}im, ${BOLD}[s]${NORMAL}ublime text, ${BOLD}[a]${NORMAL}tom or ${BOLD}[d]${NORMAL}efault...\n"
+      list_vscode_keymaps
+      ;;
+  esac
+
+  echo ""
+}
+
+install_vscode_extensions() {
+  chosen_extensions=() # When the user opts to install a package it will be added to this array.
+
+  list_vsvode_extensions
+  list_vscodes_themes
+  list_icon_themes
+  list_vscode_keymaps
+
+  _title_ "Installing Everything"
+
+  installed_extensions=$(code --list-extensions)
+
+  for extension in "${chosen_extensions[@]}"; do
+    IFS='|' read -r -a extension_info <<< "$extension"
+    extension_code="${extension_info[0]}"
+    extension_name="${extension_info[1]}"
+    extension_description="${extension_info[2]}"
+    info "${extension_name} extension : checking"
+    # get executable name from cask to check if it is already installed
+    if [[ "$installed_extensions" == *"$extension_code"* ]]; then
+      success "${extension_name} extension : ${BOLD}installed${NORMAL}"
+    else
+      status "${extension_name} extension : installing"
+      message="${extension_name} extension"
+      successfully "code --force --install-extension $extension_code" "perhaps it is already installed."
+    fi
+  done
+}
+
+setup_vscode_macos() {
+  if open -R -g -a 'Visual Studio Code' > /dev/null; then
+    _title_ "Setup Visual Studio Code"
+
+    info "VSCode: installing 'code' command"
+    destination="/usr/local/bin/code"
+    source="/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code"
+    if [[ -f "$destination" ]]; then
+      if [[ ! "$(readlink "$destination")" -ef "$source" ]]; then
+        rm "$destination"
+        ln -s "$source" "$destination"
+      fi
+    else
+      ln -s "$source" "$destination"
+    fi
+    success "VSCode: 'code' command installed"
+    install_vscode_extensions
+  fi
+}
+
+setup_vscode_other() {
+  if command -v code >/dev/null 2>&1; then
+    _title_ "Setup Visual Studio Code"
+
+    install_vscode_extensions
+  fi
+}
+
+if [[ "`uname -s`" == "Darwin" ]]; then
+  setup_vscode_macos
+else
+  setup_vscode_other
+fi
+
+trap finish EXIT
+
+if [[ $bootstrapping -ne 1 ]]; then
+  _title_ "Done... Happy Coding!"
+fi

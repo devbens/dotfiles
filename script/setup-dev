@@ -1,0 +1,201 @@
+#!/usr/bin/env bash
+
+set +e
+proceed=1
+
+DOTFILES_ROOT="$HOME/.dotfiles"
+LOGFILE=/tmp/dotfiles-setup
+
+. $DOTFILES_ROOT/script/shared-functions
+
+# ensure we capture unexpected exits
+trap exit_warning EXIT
+
+echo "Running in $0 ${BASH_VERSION}" >> $LOGFILE
+
+if [[ $bootstrapping -ne 1 ]]; then
+  header "Let's get ready for development ..."
+
+  ask_sudo_password
+
+  notice_left "\nFeel free to follow the details by running:"
+  notice_left "${BOLD} tail -f $LOGFILE ${NORMAL}in another terminal\n"
+fi
+
+install_command_line_tools() {
+  if [[ "$(uname)" == "Darwin" ]]; then
+    info "XCode Command Line Tools : checking"
+    if [[ "$(xcode-select --install 2>&1 | grep installed)" == *"installed"* ]]; then
+      success "XCode Command Line Tools : ${BOLD}installed${NORMAL}"
+    else
+      status "XCode Command Line Tools : ${BOLD}installing...${DIM}(a prompt should open to ask you for installation)${NORMAL}"
+
+      user_ask_yn "XCode Command Line Tools : is the installation done and can we proceed?" "n"
+      if [[ "$user_ask_yn_result" == "n" ]]; then
+        fail "XCode Command Line Tools : please install them.. exiting!"
+        exit
+      else
+        success "XCode Command Line Tools : installed!"
+      fi
+    fi
+  fi
+}
+
+install_homebrew() {
+  check "homebrew" "command -v brew"
+  if [[ "$(uname)" == "Darwin" ]]; then
+    successfully 'echo | ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"'
+    info "homebrew" "environment ready"
+
+    arch_name="$(uname -m)"
+    if [[ "${arch_name}" = "x86_64" ]]; then
+      eval "$(/usr/local/bin/brew shellenv)"
+    elif [[ "${arch_name}" = "arm64" ]]; then
+      eval "$(/opt/homebrew/bin/brew shellenv)"
+    fi
+  elif [[ "$(expr substr $(uname -s) 1 5)" == "Linux" ]]; then
+    if [[ $proceed -ne 0 ]]; then
+      status "homebrew : ${BOLD}installing dependencies...${NORMAL}"
+      successfully "sudo apt-get update && sudo apt-get -y install build-essential curl file git ruby" >> $LOGFILE 2>&1;
+      info "homebrew"
+      status "homebrew : ${BOLD}installing${NORMAL}"
+      successfully 'echo | sh -c "$(curl -fsSL https://raw.githubusercontent.com/Linuxbrew/install/master/install.sh)"'
+      info "homebrew" "environment ready"
+      status "homebrew : ${BOLD}environment setup${NORMAL}"
+      successfully 'test -d ~/.linuxbrew && eval $(~/.linuxbrew/bin/brew shellenv);test -d /home/linuxbrew/.linuxbrew && eval $(/home/linuxbrew/.linuxbrew/bin/brew shellenv);test -r ~/.bash_profile && echo "eval \$($(brew --prefix)/bin/brew shellenv)" >>~/.bash_profile;echo "eval \$($(brew --prefix)/bin/brew shellenv)" >>~/.profile;echo "eval \$($(brew --prefix)/bin/brew shellenv)" >>~/.localrc;sudo mkdir -p /home/linuxbrew/.linuxbrew/var/homebrew/linked;sudo chown -R $(whoami) /home/linuxbrew/.linuxbrew/var/homebrew/linked'
+    fi
+  fi
+}
+
+install_node() {
+  check "node" "command -v node"
+    successfully "brew install node"
+
+  check "npm" "command -v npm"
+    successfully "brew install npm"
+
+  check "yarn" "command -v yarn"
+    successfully "brew install yarn"
+}
+
+install_docker() {
+  if [[ "$(uname)" == "Darwin" ]]; then
+    # check sudo or keep it alive before spinner starts
+    sudo -v
+
+    check "docker for mac" "command -v docker"
+    successfully "brew install --cask docker"
+  fi
+}
+
+install_ruby() {
+  if [ -z "$HOMEBREW_PREFIX" ];
+    echo "${BOLD}Homebrew is not installed!! (\$HOMEBREW_PREFIX is empty) Please make sure Homebrew is correctly set up before continuing...${NORMAL}"
+    exit 1
+  fi
+
+  if [[ "$(uname)" == "Darwin" ]]; then
+    check "rbenv" "ls $HOMEBREW_PREFIX/rbenv > /dev/null" "cd $HOMEBREW_PREFIX/rbenv && git pull"
+    successfully "sudo git clone https://github.com/rbenv/rbenv.git $HOMEBREW_PREFIX/rbenv >> $LOGFILE 2>&1; sudo chgrp -R staff $HOMEBREW_PREFIX/rbenv; sudo chmod -R g+rwxXs $HOMEBREW_PREFIX/rbenv;"
+  elif [[ "$(expr substr $(uname -s) 1 5)" == "Linux" ]]; then
+    check "rbenv" "ls ~/.rbenv > /dev/null" "cd ~/.rbenv && git pull"
+    successfully "git clone https://github.com/rbenv/rbenv.git ~/.rbenv >> $LOGFILE 2>&1;"
+  fi
+
+  if [[ "$(uname)" == "Darwin" ]]; then
+    check "ruby-build" "ls $HOMEBREW_PREFIX/rbenv/plugins/ruby-build > /dev/null" "cd $HOMEBREW_PREFIX/rbenv/plugins/ruby-build && git pull"
+    successfully "mkdir -p $HOMEBREW_PREFIX/rbenv/plugins; git clone https://github.com/sstephenson/ruby-build.git $HOMEBREW_PREFIX/rbenv/plugins/ruby-build >> $LOGFILE 2>&1; sudo chgrp -R staff $HOMEBREW_PREFIX/rbenv/plugins/ruby-build; sudo chmod -R g+rwxs $HOMEBREW_PREFIX/rbenv/plugins/ruby-build;"
+  elif [[ "$(expr substr $(uname -s) 1 5)" == "Linux" ]]; then
+    check "ruby-build" "ls ~/.rbenv/plugins/ruby-build > /dev/null" "cd ~/.rbenv/plugins/ruby-build && git pull"
+    successfully "mkdir -p ~/.rbenv/plugins; git clone https://github.com/sstephenson/ruby-build.git ~/.rbenv/plugins/ruby-build >> $LOGFILE 2>&1;"
+  fi
+
+  if [[ -d "$HOMEBREW_PREFIX/rbenv" ]]; then
+    export RBENV_ROOT="$HOMEBREW_PREFIX/rbenv"
+    export PATH="$RBENV_ROOT/bin:$RBENV_ROOT/shims:$PATH"
+    eval "$(rbenv init -)"
+  fi
+
+  if [[ -d "$HOME/.rbenv" ]]; then
+    export RBENV_ROOT="$HOME/.rbenv"
+    export PATH="$RBENV_ROOT/bin:$RBENV_ROOT/shims:$PATH"
+    eval "$(rbenv init -)"
+  fi
+
+  if [[ "$(uname)" == "Darwin" ]]; then
+    check "ruby dependencies - openssl" "brew ls --versions openssl"
+    successfully "brew install openssl"
+    check "ruby dependencies - libyaml" "brew ls --versions libyaml"
+    successfully "brew install libyaml"
+    check "ruby dependencies - libffi" "brew ls --versions libffi"
+    successfully "brew install libffi"
+  elif [[ "$(expr substr $(uname -s) 1 5)" == "Linux" ]]; then
+    info "ruby dependencies"
+    status "ruby dependencies : ${BOLD}installing${NORMAL}"
+    successfully "sudo apt-get update && sudo apt-get install -y autoconf bison build-essential libssl-dev libyaml-dev libreadline6-dev zlib1g-dev libncurses5-dev libffi-dev libgdbm-dev"
+  fi
+
+  check "ruby 2.6.7" "rbenv versions | grep 2.6.7"
+    successfully "rbenv install 2.6.7; rbenv shell 2.6.7; gem install bundler; gem install bundler -v '<2'"
+}
+
+install_vagrant() {
+  if [[ "$(uname)" == "Darwin" ]]; then
+    # check sudo or keep it alive before spinner starts
+    sudo -v
+
+    check "virtualbox" "command -v VirtualBox"
+    successfully "brew install --cask virtualbox"
+
+    # check sudo or keep it alive before spinner starts
+    sudo -v
+
+    check "vagrant" "command -v vagrant"
+    successfully "brew install --cask vagrant"
+  fi
+}
+
+setup_git() {
+  user_ask_yn "Want to setup your Git profile?" "y"
+  if [[ "$user_ask_yn_result" == "y" ]]; then
+    bootstrapping=1 $HOME/.dotfiles/script/setup-git
+  else
+    success "Ok, skipping Git profile setup."
+  fi
+}
+
+setup_vscode() {
+  user_ask_yn "Want to setup Visual Studio Code?" "y"
+  if [[ "$user_ask_yn_result" == "y" ]]; then
+    bootstrapping=1 $HOME/.dotfiles/script/setup-vscode
+  else
+    success "Ok, skipping VSCode setup."
+  fi
+}
+
+setup_hyper () {
+  user_ask_yn "Would you like to use the Hyper Terminal?" "y"
+  if [[ "$user_ask_yn_result" == "y" ]]; then
+    bootstrapping=1 $HOME/.dotfiles/script/setup-hyper
+  else
+    success "Ok, no probs!"
+  fi
+}
+
+
+setup_git
+install_command_line_tools
+install_node
+install_homebrew
+install_ruby
+install_docker
+install_vagrant
+setup_vscode
+
+_spinner_stop
+
+trap finish EXIT
+
+if [[ $bootstrapping -ne 1 ]]; then
+  _title_ "Done... Happy Coding!"
+fi
